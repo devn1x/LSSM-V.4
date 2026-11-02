@@ -1,3 +1,5 @@
+import forEachMission from './forEachMission';
+
 import type { MissionMarkerAdd } from 'typings/Ingame';
 
 export interface ButtonGroupCallback {
@@ -38,11 +40,10 @@ export default (
         return btnGroup;
     };
 
-    document
-        .querySelectorAll<HTMLDivElement>(
-            '#missions-panel-body .missionSideBarEntry'
-        )
-        .forEach(addButtonGroup);
+    forEachMission(mission => {
+        if (!mission.querySelector(`.${btnGroupClass}`))
+            addButtonGroup(mission);
+    });
 
     LSSM.$stores.root.hook({
         event: 'missionMarkerAdd',

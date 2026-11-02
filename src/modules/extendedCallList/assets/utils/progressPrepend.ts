@@ -1,3 +1,5 @@
+import forEachMission from './forEachMission';
+
 import type { MissionMarkerAdd } from 'typings/Ingame';
 
 export interface ProgressPrependCallback {
@@ -36,11 +38,10 @@ export default (
         });
     };
 
-    document
-        .querySelectorAll<HTMLDivElement>(
-            '#missions-panel-body .missionSideBarEntry'
-        )
-        .forEach(updateProgressBar);
+    forEachMission(mission => {
+        if (!mission.querySelector(`.${progressBarClass}`))
+            updateProgressBar(mission);
+    });
 
     LSSM.$stores.root.hook({
         event: 'missionMarkerAdd',

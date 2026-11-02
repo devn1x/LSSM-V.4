@@ -1,3 +1,5 @@
+import forEachMission from './utils/forEachMission';
+
 import type {
     MissionMarkerAdd,
     PatientMarkerAdd,
@@ -95,11 +97,7 @@ export default (
         }
     };
 
-    document
-        .querySelectorAll<HTMLDivElement>(
-            '#missions-panel-body .missionSideBarEntry'
-        )
-        .forEach(panel => setPatients(panel));
+    forEachMission(panel => setPatients(panel));
 
     LSSM.$stores.root.hook({
         event: 'missionMarkerAdd',

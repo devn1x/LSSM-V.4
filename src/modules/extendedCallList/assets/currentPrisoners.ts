@@ -1,3 +1,5 @@
+import forEachMission from './utils/forEachMission';
+
 import type { MissionMarkerAdd, PrisonerMarkerAdd } from 'typings/Ingame';
 
 export default (
@@ -78,11 +80,7 @@ export default (
         }
     };
 
-    document
-        .querySelectorAll<HTMLDivElement>(
-            '#missions-panel-body .missionSideBarEntry'
-        )
-        .forEach(panel => setPrisoners(panel));
+    forEachMission(panel => setPrisoners(panel));
 
     LSSM.$stores.root.hook({
         event: 'missionMarkerAdd',

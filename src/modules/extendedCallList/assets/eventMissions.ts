@@ -1,3 +1,5 @@
+import forEachMission from './utils/forEachMission';
+
 import type { MissionMarkerAdd } from 'typings/Ingame';
 
 export default (
@@ -56,11 +58,7 @@ export default (
         }
     };
 
-    document
-        .querySelectorAll<HTMLDivElement>(
-            '#missions-panel-body .missionSideBarEntry'
-        )
-        .forEach(panel => checkEvent(panel));
+    forEachMission(panel => checkEvent(panel));
 
     LSSM.$stores.root.hook({
         event: 'missionMarkerAdd',
