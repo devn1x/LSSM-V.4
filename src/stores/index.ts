@@ -17,6 +17,11 @@ import type {
 } from 'typings/store/Actions';
 import type { GameFlavour, LSSMEvent } from 'typings/helpers';
 
+// Number of listeners registered via hook() per internal hook event name.
+// Hooked game functions can be called very often (e.g. missionTimer once per mission and tick),
+// so events without any listener are not dispatched at all.
+const hookListenerCounts: Record<string, number> = {};
+
 export const defineRootStore = defineStore('root', {
     state: () =>
         <RootState>{
@@ -114,9 +119,9 @@ export const defineRootStore = defineStore('root', {
         }: Hook<Arguments>) {
             const eventStore = useEventStore();
             const internalEventNamePrefix = `hook_${event}`;
-            const internalEventName = `${internalEventNamePrefix}_${
-                post ? 'after' : 'before'
-            }`;
+            const beforeEventName = `${internalEventNamePrefix}_before`;
+            const afterEventName = `${internalEventNamePrefix}_after`;
+            const internalEventName = post ? afterEventName : beforeEventName;
             if (!this.hooks.hasOwnProperty(event)) {
                 const split = event.split('.');
                 const eventName = split.pop();
@@ -132,22 +137,28 @@ export const defineRootStore = defineStore('root', {
                 this.hooks[event] = eventParentObject[eventName];
                 eventParentObject[eventName] = (...args: Arguments) => {
                     if (!abortOnFalse) {
-                        eventStore.createAndDispatchEvent({
-                            name: `${internalEventNamePrefix}_before`,
-                            detail: args,
-                        });
+                        if (hookListenerCounts[beforeEventName]) {
+                            eventStore.createAndDispatchEvent({
+                                name: beforeEventName,
+                                detail: args,
+                            });
+                        }
                     } else if (!callback(...args)) {
                         return;
                     }
 
                     const result = this.hooks[event](...args);
-                    eventStore.createAndDispatchEvent({
-                        name: `${internalEventNamePrefix}_after`,
-                        detail: args,
-                    });
+                    if (hookListenerCounts[afterEventName]) {
+                        eventStore.createAndDispatchEvent({
+                            name: afterEventName,
+                            detail: args,
+                        });
+                    }
                     return result;
                 };
             }
+            hookListenerCounts[internalEventName] =
+                (hookListenerCounts[internalEventName] ?? 0) + 1;
             eventStore.addListener({
                 name: internalEventName,
                 listener(event: LSSMEvent<Arguments>) {
