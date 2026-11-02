@@ -2,11 +2,11 @@ import type Vue from 'vue';
 
 import { defineStore } from 'pinia';
 import { useAPIStore } from '@stores/api';
-import { useEventStore } from '@stores/event';
 
 import config from '../config';
 import lssmLogo from '../img/lssm.png';
 
+import type { GameFlavour } from 'typings/helpers';
 import type { RootState } from 'typings/store/RootState';
 import type {
     addStyle,
@@ -15,7 +15,35 @@ import type {
     premodifyParams,
     ProxyParams,
 } from 'typings/store/Actions';
-import type { GameFlavour, LSSMEvent } from 'typings/helpers';
+
+// Callbacks registered via hook(), per hooked function and phase.
+// Hooked game functions can be called thousands of times per second
+// (e.g. missionTimer once per mission and tick), so callbacks are called
+// directly instead of creating and dispatching a CustomEvent on every call.
+const hookCallbacks: Record<
+    string,
+    {
+        before: ((...args: unknown[]) => unknown)[];
+        after: ((...args: unknown[]) => unknown)[];
+    }
+> = {};
+
+const runHookCallbacks = (
+    event: string,
+    callbacks: ((...args: unknown[]) => unknown)[],
+    args: unknown[]
+) => {
+    for (const callback of callbacks) {
+        try {
+            callback(...args);
+        } catch (error) {
+            // like event listeners before: a failing callback must not break
+            // the game function or other callbacks
+            // eslint-disable-next-line no-console
+            console.error(`[LSSM] error in hook callback for ${event}:`, error);
+        }
+    }
+};
 
 export const defineRootStore = defineStore('root', {
     state: () =>
@@ -112,11 +140,6 @@ export const defineRootStore = defineStore('root', {
             callback = () => null,
             abortOnFalse = false,
         }: Hook<Arguments>) {
-            const eventStore = useEventStore();
-            const internalEventNamePrefix = `hook_${event}`;
-            const internalEventName = `${internalEventNamePrefix}_${
-                post ? 'after' : 'before'
-            }`;
             if (!this.hooks.hasOwnProperty(event)) {
                 const split = event.split('.');
                 const eventName = split.pop();
@@ -127,33 +150,28 @@ export const defineRootStore = defineStore('root', {
                         (previousValue || window)[currentValue],
                     window
                 ) as Record<string, (...args: Arguments) => unknown>;
+                const callbacks = { before: [], after: [] };
+                hookCallbacks[event] = callbacks;
                 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
                 // @ts-ignore
                 this.hooks[event] = eventParentObject[eventName];
                 eventParentObject[eventName] = (...args: Arguments) => {
                     if (!abortOnFalse) {
-                        eventStore.createAndDispatchEvent({
-                            name: `${internalEventNamePrefix}_before`,
-                            detail: args,
-                        });
+                        if (callbacks.before.length)
+                            runHookCallbacks(event, callbacks.before, args);
                     } else if (!callback(...args)) {
                         return;
                     }
 
                     const result = this.hooks[event](...args);
-                    eventStore.createAndDispatchEvent({
-                        name: `${internalEventNamePrefix}_after`,
-                        detail: args,
-                    });
+                    if (callbacks.after.length)
+                        runHookCallbacks(event, callbacks.after, args);
                     return result;
                 };
             }
-            eventStore.addListener({
-                name: internalEventName,
-                listener(event: LSSMEvent<Arguments>) {
-                    callback(...event.detail);
-                },
-            });
+            hookCallbacks[event]?.[post ? 'after' : 'before'].push(
+                callback as (...args: unknown[]) => unknown
+            );
         },
         proxyMethod({ post = true, name, callback, trap }: ProxyParams) {
             const split = name.split('.');
